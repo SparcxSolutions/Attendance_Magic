@@ -4,6 +4,9 @@ from math import radians, sin, cos, sqrt, atan2
 from django.utils import timezone
 from datetime import timedelta
 from django.db.models import Count
+from face.models import SessionFace
+from face.services.insightface_service import face_service
+
 import pandas as pd
 from django.http import HttpResponse
 from rest_framework.permissions import IsAuthenticated
@@ -11,6 +14,7 @@ from rest_framework.decorators import permission_classes
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from face.models import SessionFace
 from django.db.models.functions import TruncDate
 from .models import AttendanceSession, AttendanceRecord
 from .serializers import (
@@ -238,7 +242,6 @@ def verify_location(request):
         "department": session.department,
         "section": session.section
     })
-
 @api_view(["POST"])
 def mark_attendance(request):
 
@@ -247,27 +250,102 @@ def mark_attendance(request):
     session_id = request.data.get("session_id")
     roll_number = request.data.get("roll_number")
     device_id = request.data.get("device_id")
+    face_image = request.data.get("face_image")
 
+    # ----------------------------
+    # Validate Face Image
+    # ----------------------------
+    if not face_image:
+        return Response(
+            {
+                "message": "Face image is required."
+            },
+            status=400
+        )
+
+    # ----------------------------
+    # Validate Session
+    # ----------------------------
     try:
         session = AttendanceSession.objects.get(
             id=session_id,
             is_active=True
         )
+
     except AttendanceSession.DoesNotExist:
+
         return Response(
-            {"message": "Attendance Session Not Found"},
+            {
+                "message": "Attendance Session Not Found"
+            },
             status=404
         )
 
+    # ----------------------------
+    # Check Session Expiry
+    # ----------------------------
     if timezone.now() > session.expires_at:
+
         session.is_active = False
         session.save()
 
         return Response(
-            {"message": "Attendance Session Expired"},
+            {
+                "message": "Attendance Session Expired"
+            },
             status=400
         )
 
+    # ----------------------------
+    # Generate Face Embedding
+    # ----------------------------
+    try:
+
+        current_embedding = face_service.image_to_embedding(
+            face_image
+        )
+
+    except Exception as e:
+
+        return Response(
+            {
+                "message": str(e)
+            },
+            status=400
+        )
+
+    # ----------------------------
+    # Duplicate Face Check
+    # ----------------------------
+    stored_faces = SessionFace.objects.filter(
+        session=session
+    )
+
+    SIMILARITY_THRESHOLD = 0.65
+
+    for stored_face in stored_faces:
+
+        similarity = face_service.similarity(
+            current_embedding,
+            stored_face.embedding
+        )
+
+        print(
+            f"Similarity : {similarity}"
+        )
+
+        if similarity >= SIMILARITY_THRESHOLD:
+
+            return Response(
+                {
+                    "message": "You have already attempted attendance for this session."
+                },
+                status=400
+            )
+
+    # ----------------------------
+    # Roll Number Check
+    # ----------------------------
     if AttendanceRecord.objects.filter(
         session=session,
         roll_number=roll_number
@@ -280,6 +358,9 @@ def mark_attendance(request):
             status=400
         )
 
+    # ----------------------------
+    # Device Check
+    # ----------------------------
     if AttendanceRecord.objects.filter(
         session=session,
         device_id=device_id
@@ -292,23 +373,35 @@ def mark_attendance(request):
             status=400
         )
 
+    # ----------------------------
+    # Save Attendance
+    # ----------------------------
     data = request.data.copy()
     data["session"] = session.id
 
-    print("Serializer Data:", data)
-
-    serializer = AttendanceRecordSerializer(data=data)
+    serializer = AttendanceRecordSerializer(
+        data=data
+    )
 
     if serializer.is_valid():
-        print(data)
-        serializer.save()
 
-        return Response({
-            "message": "Attendance Marked Successfully",
-            "data": serializer.data
-        })
+        attendance = serializer.save()
 
-    print("Serializer Errors:", serializer.errors)
+        # ----------------------------
+        # Save Face Embedding
+        # ----------------------------
+        SessionFace.objects.create(
+            session=session,
+            attendance=attendance,
+            embedding=current_embedding
+        )
+
+        return Response(
+            {
+                "message": "Attendance Marked Successfully",
+                "data": serializer.data
+            }
+        )
 
     return Response(
         {
@@ -316,7 +409,6 @@ def mark_attendance(request):
         },
         status=400
     )
-
 # ===== FACULTY DASHBOARD APIs =====
 
 
@@ -434,14 +526,22 @@ def export_excel(request):
 
     return response 
 
+
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def end_session(request):
 
-    AttendanceSession.objects.filter(
+    sessions = AttendanceSession.objects.filter(
         faculty=request.user,
         is_active=True
-    ).update(
+    )
+
+    for session in sessions:
+        SessionFace.objects.filter(
+            session=session
+        ).delete()
+
+    sessions.update(
         is_active=False
     )
 
