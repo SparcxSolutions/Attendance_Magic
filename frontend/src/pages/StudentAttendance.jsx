@@ -37,7 +37,7 @@ function StudentAttendance() {
 
 })();
 
-    useEffect(() => {
+  useEffect(() => {
 
     loadSession();
 
@@ -47,21 +47,25 @@ function StudentAttendance() {
 
             await API.get(`session/${id}/`);
 
-        }
+        } catch (error) {
 
-        catch (error) {
+            if (
+                error.response &&
+                (error.response.status === 400 ||
+                 error.response.status === 404)
+            ) {
+                setSessionExpired(true);
+                clearInterval(interval);
+            }
 
-            setSessionExpired(true);
-
-            clearInterval(interval);
-
+            // Ignore temporary server/network errors
         }
 
     }, 3000);
 
     return () => clearInterval(interval);
 
-}, []);
+}, [id]);
 
     const loadSession = async () => {
 
@@ -73,19 +77,35 @@ function StudentAttendance() {
 
             setSession(response.data);
 
-            setDepartment("CSE");
-
-setSection("A");
+            setDepartment(response.data.department);
+setSection(response.data.section);
 
         }
 
+        // catch (error) {
+
+        //     console.log(error);
+
+        //     alert("Session Not Found");
+
+        // }/
         catch (error) {
 
-            console.log(error);
+    if (
+        error.response &&
+        (error.response.status === 400 ||
+         error.response.status === 404)
+    ) {
 
-            alert("Session Not Found");
+        setSessionExpired(true);
 
-        }
+    } else {
+
+        alert("Unable to connect to server.");
+
+    }
+
+}
 
         finally {
 
