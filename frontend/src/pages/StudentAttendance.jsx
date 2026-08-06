@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
+import Webcam from "react-webcam";
 import { useParams } from "react-router-dom";
 import API from "../services/api";
 
@@ -18,6 +19,9 @@ function StudentAttendance() {
 
     const [verified, setVerified] = useState(false);
     const [distance, setDistance] = useState(null);
+    const webcamRef = useRef(null);
+
+    const [faceImage, setFaceImage] = useState(null);
     const deviceId = (() => {
 
     let id = localStorage.getItem("device_id");
@@ -258,11 +262,34 @@ if (loading) {
         );
 
     }
+
+const captureFace = () => {
+
+    const image = webcamRef.current.getScreenshot();
+
+    if (!image) {
+        alert("Unable to capture image.");
+        return;
+    }
+
+    setFaceImage(image);
+
+    alert("Face captured successfully.");
+
+};
 const markAttendance = async () => {
 
     if (!verified) {
 
         alert("Please verify your location first.");
+
+        return;
+
+    }
+
+    if (!faceImage) {
+
+        alert("Please capture your face.");
 
         return;
 
@@ -278,23 +305,22 @@ const markAttendance = async () => {
                 roll_number: rollNumber,
                 department,
                 section,
-                device_id: deviceId
+                device_id: deviceId,
+                face_image: faceImage
             }
         );
 
         setAttendanceDone(true);
 
+    } catch (error) {
+
+        console.log(error.response?.data);
+
+        alert(
+            JSON.stringify(error.response?.data, null, 2)
+        );
+
     }
-
-    catch (error) {
-
-    console.log(error.response.data);
-
-    alert(
-        JSON.stringify(error.response.data, null, 2)
-    );
-
-}
 
 };
 
@@ -535,6 +561,34 @@ if (attendanceDone) {
                             <>
 
                                 <hr className="my-8" />
+                                <div className="mb-6">
+
+    <h2 className="text-2xl font-bold mb-4">
+
+        Face Verification
+
+    </h2>
+
+    <Webcam
+        ref={webcamRef}
+        screenshotFormat="image/jpeg"
+        className="w-full rounded-xl border"
+    />
+
+    <button
+        onClick={captureFace}
+        className="w-full mt-4 bg-purple-600 hover:bg-purple-700 text-white py-3 rounded-xl"
+    >
+        📸 Capture Face
+    </button>
+
+    {faceImage && (
+        <p className="text-green-600 font-semibold mt-3">
+            ✅ Face Captured Successfully
+        </p>
+    )}
+
+</div>
 
                                 <h2 className="text-2xl font-bold mb-6">
 
