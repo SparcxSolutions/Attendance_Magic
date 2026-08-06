@@ -300,6 +300,7 @@ def mark_attendance(request):
     serializer = AttendanceRecordSerializer(data=data)
 
     if serializer.is_valid():
+        print(data)
         serializer.save()
 
         return Response({
