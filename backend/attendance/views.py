@@ -242,26 +242,24 @@ def verify_location(request):
 @api_view(["POST"])
 def mark_attendance(request):
 
+    print("Incoming Data:", request.data)
+
     session_id = request.data.get("session_id")
     roll_number = request.data.get("roll_number")
     device_id = request.data.get("device_id")
 
     try:
-
         session = AttendanceSession.objects.get(
             id=session_id,
             is_active=True
         )
-
     except AttendanceSession.DoesNotExist:
-
         return Response(
             {"message": "Attendance Session Not Found"},
             status=404
         )
 
     if timezone.now() > session.expires_at:
-
         session.is_active = False
         session.save()
 
@@ -276,7 +274,9 @@ def mark_attendance(request):
     ).exists():
 
         return Response(
-            {"message": "Attendance already marked with this Roll Number."},
+            {
+                "message": "Attendance already marked with this Roll Number."
+            },
             status=400
         )
 
@@ -286,17 +286,20 @@ def mark_attendance(request):
     ).exists():
 
         return Response(
-            {"message": "Attendance has already been submitted from this device."},
+            {
+                "message": "Attendance has already been submitted from this device."
+            },
             status=400
         )
 
     data = request.data.copy()
     data["session"] = session.id
 
+    print("Serializer Data:", data)
+
     serializer = AttendanceRecordSerializer(data=data)
 
     if serializer.is_valid():
-
         serializer.save()
 
         return Response({
@@ -304,7 +307,14 @@ def mark_attendance(request):
             "data": serializer.data
         })
 
-    return Response(serializer.errors, status=400)
+    print("Serializer Errors:", serializer.errors)
+
+    return Response(
+        {
+            "errors": serializer.errors
+        },
+        status=400
+    )
 
 # ===== FACULTY DASHBOARD APIs =====
 
