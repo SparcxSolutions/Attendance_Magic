@@ -191,16 +191,26 @@ def session_details(request, session_id):
 @api_view(["POST"])
 def verify_location(request):
 
+    session_id = request.data.get("session_id")
     student_lat = request.data.get("latitude")
     student_lon = request.data.get("longitude")
 
-    session = AttendanceSession.objects.filter(
-        is_active=True
-    ).first()
-
-    if not session:
+    if not session_id:
         return Response(
-            {"message": "No Active Session"},
+            {"message": "Session ID is required"},
+            status=400
+        )
+
+    try:
+        session = AttendanceSession.objects.get(
+            id=session_id,
+            is_active=True
+        )
+
+    except AttendanceSession.DoesNotExist:
+
+        return Response(
+            {"message": "Attendance Session Not Found"},
             status=404
         )
 
@@ -213,9 +223,6 @@ def verify_location(request):
             {"message": "Attendance Session Expired"},
             status=400
         )
-    
-    print("Faculty:", session.faculty_latitude, session.faculty_longitude)
-    print("Student:", student_lat, student_lon)
 
     distance = calculate_distance(
         session.faculty_latitude,
@@ -224,8 +231,6 @@ def verify_location(request):
         float(student_lon)
     )
 
-    print("Distance:", distance)
-
     return Response({
         "verified": distance <= session.radius,
         "distance": round(distance, 2),
@@ -233,8 +238,6 @@ def verify_location(request):
         "department": session.department,
         "section": session.section
     })
-
-
 
 @api_view(["POST"])
 def mark_attendance(request):
