@@ -77,8 +77,8 @@ function StudentAttendance() {
 
             setSession(response.data);
 
-            setDepartment(response.data.department);
-setSection(response.data.section);
+          setDepartment(response.data.department || "CSE");
+setSection(response.data.section || "A");
 
         }
 
@@ -288,15 +288,13 @@ const markAttendance = async () => {
 
     catch (error) {
 
-        alert(
+    console.log(error.response.data);
 
-            error.response?.data?.message ||
+    alert(
+        JSON.stringify(error.response.data, null, 2)
+    );
 
-            "Unable to mark attendance."
-
-        );
-
-    }
+}
 
 };
 
