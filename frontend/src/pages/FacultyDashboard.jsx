@@ -7,6 +7,7 @@ import AttendanceSummary from "../components/AttendanceSummary";
 import StudentTable from "../components/StudentTable";
 import { CalendarDays, Users, Activity, Copy, StopCircle, Search } from "lucide-react";
 import { toast, Toaster } from "react-hot-toast";
+import "./FacultyDashboard.css";
 
 function FacultyDashboard() {
 
@@ -197,31 +198,17 @@ function FacultyDashboard() {
     });
 
     return (
-        <div className="min-h-screen bg-slate-50 p-4 sm:p-8 font-sans relative overflow-x-hidden animate-fade-in">
+        <div className="faculty-dashboard-wrapper">
             <Toaster position="top-center" />
-            <style>
-                {`
-                    @keyframes fadeIn {
-                        from { opacity: 0; }
-                        to { opacity: 1; }
-                    }
-                    .animate-fade-in {
-                        animation: fadeIn 0.8s ease-out forwards;
-                    }
-                    input::placeholder {
-                        color: #9ca3af;
-                    }
-                `}
-            </style>
 
-            <div className="relative z-10 max-w-7xl mx-auto">
+            <div className="faculty-dashboard-main">
                 <Navbar />
 
-                <h1 className="text-[32px] sm:text-[36px] font-extrabold mb-8 mt-10 tracking-tight text-gray-900">
+                <h1 className="faculty-dashboard-title">
                     Welcome Back, Faculty
                 </h1>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
+                <div className="faculty-dashboard-stats-grid">
                     <StatsCard
                         title="Today's Sessions"
                         value={sessionActive ? 1 : 0}
@@ -259,47 +246,47 @@ function FacultyDashboard() {
                 )}
 
                 {attendanceLink && (
-                    <div className="bg-white border border-gray-200 rounded-[28px] shadow-sm p-8 mt-10 animate-fade-in">
-                        <h2 className="text-2xl font-bold mb-6 flex items-center gap-3 text-gray-900">
-                            <div className="w-10 h-10 rounded-xl bg-green-100 flex items-center justify-center text-green-600">
-                                <Activity size={22} className="animate-pulse" strokeWidth={2.5} />
+                    <div className="live-session-container">
+                        <h2 className="live-session-title">
+                            <div className="live-session-icon-wrapper">
+                                <Activity size={22} className="live-session-icon-pulse" strokeWidth={2.5} />
                             </div>
                             Live Attendance Session
                         </h2>
 
-                        <div className="space-y-5">
-                            <p className="text-gray-600">
-                                <strong className="text-gray-900 font-semibold">Status :</strong>{" "}
+                        <div className="live-session-details">
+                            <p className="live-session-text">
+                                <strong className="live-session-label">Status :</strong>{" "}
                                 {sessionActive ? (
-                                    <span className="text-green-600 font-bold tracking-wide">Active</span>
+                                    <span className="status-active">Active</span>
                                 ) : (
-                                    <span className="text-red-500 font-bold tracking-wide">Expired</span>
+                                    <span className="status-expired">Expired</span>
                                 )}
                             </p>
 
-                            <p className="text-gray-600">
-                                <strong className="text-gray-900 font-semibold">Time Remaining :</strong>{" "}
-                                <span className="text-[#ff5a00] font-bold text-xl tracking-wider">
+                            <p className="live-session-text">
+                                <strong className="live-session-label">Time Remaining :</strong>{" "}
+                                <span className="time-remaining">
                                     {timeLeft}
                                 </span>
                             </p>
 
-                            <div>
-                                <label className="block text-[14px] font-medium text-gray-600 mb-2 tracking-wide">Attendance Link</label>
+                            <div className="link-input-container">
+                                <label className="link-input-label">Attendance Link</label>
                                 <input
-                                    className="block w-full h-[54px] px-5 rounded-[16px] border border-gray-200 bg-gray-50 text-gray-600 font-medium focus:outline-none"
+                                    className="link-input-field"
                                     readOnly
                                     value={attendanceLink}
                                 />
                             </div>
 
-                            <div className="flex flex-wrap gap-4 pt-3">
+                            <div className="action-buttons-container">
                                 <button
                                     onClick={() => {
                                         navigator.clipboard.writeText(attendanceLink);
                                         toast.success("Attendance Link Copied!");
                                     }}
-                                    className="bg-blue-50 hover:bg-blue-100 border border-blue-100 text-blue-700 px-6 py-3 rounded-[14px] font-semibold transition-all duration-300 flex items-center gap-2"
+                                    className="btn-action btn-copy"
                                 >
                                     <Copy size={18} strokeWidth={2.5} />
                                     Copy Attendance Link
@@ -307,11 +294,11 @@ function FacultyDashboard() {
                                 <button
                                     onClick={endSession}
                                     disabled={endLoading}
-                                    className={`bg-red-50 hover:bg-red-100 border border-red-100 text-red-600 px-6 py-3 rounded-[14px] font-semibold transition-all duration-300 flex items-center gap-2 ${endLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                    className={`btn-action btn-end`}
                                 >
                                     {endLoading ? (
-                                        <span className="flex items-center gap-2">
-                                            <div className="w-4 h-4 border-2 border-red-600 border-t-transparent rounded-full animate-spin"></div>
+                                        <span className="spinner-wrapper">
+                                            <div className="spinner-circle"></div>
                                             Processing...
                                         </span>
                                     ) : (
@@ -326,24 +313,24 @@ function FacultyDashboard() {
                     </div>
                 )}
 
-                <hr className="my-12 border-gray-200" />
+                <hr className="dashboard-divider" />
 
                 <AttendanceSummary
                     groupedSummary={groupedSummary}
                     fetchStudents={fetchStudents}
                 />
                 
-                <div className="mt-10 mb-6">
-                    <div className="relative group">
-                        <div className="absolute inset-y-0 left-0 pl-6 flex items-center pointer-events-none transition-colors duration-300">
-                            <Search className="h-[22px] w-[22px] text-gray-400" strokeWidth={2.5} />
+                <div className="search-container">
+                    <div className="search-input-wrapper">
+                        <div className="search-icon-wrapper">
+                            <Search className="search-icon" strokeWidth={2.5} />
                         </div>
                         <input
                             type="text"
                             placeholder="Search by Name or Roll Number"
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
-                            className="block w-full h-[60px] pl-[56px] pr-5 rounded-[18px] border border-gray-200 bg-white focus:bg-white focus:outline-none focus:ring-[2px] focus:ring-[#ff5a00]/30 focus:border-[#ff5a00] transition-all duration-300 text-gray-900 font-medium text-[16px] placeholder-gray-400 shadow-sm"
+                            className="search-input"
                         />
                     </div>
                 </div>
