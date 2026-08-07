@@ -1,25 +1,17 @@
 import { useEffect, useRef, useState } from "react";
 import * as faceapi from '@vladmandic/face-api';
 
-const CHALLENGES = [
-    { id: "TURN_LEFT", text: "Turn Head Left" },
-    { id: "TURN_RIGHT", text: "Turn Head Right" },
-    { id: "LOOK_UP", text: "Look Up" },
-    { id: "LOOK_DOWN", text: "Look Down" }
-];
-
 export default function FacialChallenge({ onChallengeSuccess }) {
     const videoRef = useRef(null);
     const canvasRef = useRef(null);
-    const [challenge, setChallenge] = useState(null);
+    const [blinkCount, setBlinkCount] = useState(0);
     const [status, setStatus] = useState("Initializing camera...");
     const cameraRef = useRef(null);
     const successTriggered = useRef(false);
     const faceMeshRef = useRef(null);
+    const lastBlinkState = useRef(false);
 
     useEffect(() => {
-        const randomChallenge = CHALLENGES[Math.floor(Math.random() * CHALLENGES.length)];
-        setChallenge(randomChallenge);
 
         const loadFaceApiModels = async () => {
             try {
@@ -82,74 +74,90 @@ export default function FacialChallenge({ onChallengeSuccess }) {
                     }
 
                     if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {
-                        setStatus(`Challenge: ${randomChallenge.text}`);
                         const landmarks = results.multiFaceLandmarks[0];
                         
-                        const nose = landmarks[1];
-                        const leftCheek = landmarks[234];
-                        const rightCheek = landmarks[454];
-                        const topHead = landmarks[10];
-                        const bottomChin = landmarks[152];
+                        // EAR calculation
+                        const dist = (p1, p2) => Math.hypot(p1.x - p2.x, p1.y - p2.y);
+                        const getEAR = (indices) => {
+                            const p1 = landmarks[indices[0]];
+                            const p2 = landmarks[indices[1]];
+                            const p3 = landmarks[indices[2]];
+                            const p4 = landmarks[indices[3]];
+                            const p5 = landmarks[indices[4]];
+                            const p6 = landmarks[indices[5]];
+                            return (dist(p2, p6) + dist(p3, p5)) / (2.0 * dist(p1, p4));
+                        };
 
-                        const leftDist = nose.x - leftCheek.x;
-                        const rightDist = rightCheek.x - nose.x;
-                        const yawRatio = leftDist / rightDist;
-
-                        const topDist = nose.y - topHead.y;
-                        const bottomDist = bottomChin.y - nose.y;
-                        const pitchRatio = topDist / bottomDist;
-
-                        let success = false;
+                        const leftEyeIndices = [33, 160, 158, 133, 153, 144];
+                        const rightEyeIndices = [362, 385, 387, 263, 373, 380];
                         
-                        if (randomChallenge.id === "TURN_LEFT") {
-                            if (yawRatio > 2.0) success = true;
-                        } else if (randomChallenge.id === "TURN_RIGHT") {
-                            if (yawRatio < 0.6) success = true; // slightly relaxed from 0.5
-                        } else if (randomChallenge.id === "LOOK_UP") {
-                            if (pitchRatio < 0.6) success = true;
-                        } else if (randomChallenge.id === "LOOK_DOWN") {
-                            if (pitchRatio > 1.8) success = true;
+                        const leftEAR = getEAR(leftEyeIndices);
+                        const rightEAR = getEAR(rightEyeIndices);
+                        const avgEAR = (leftEAR + rightEAR) / 2.0;
+
+                        const isBlinking = avgEAR < 0.22; // Threshold for a blink
+                        
+                        if (isBlinking && !lastBlinkState.current) {
+                            lastBlinkState.current = true;
+                        } else if (!isBlinking && lastBlinkState.current) {
+                            lastBlinkState.current = false;
+                            setBlinkCount(prev => {
+                                const newCount = prev + 1;
+                                if (newCount < 2) {
+                                    setStatus(`Blinks detected: ${newCount} / 2`);
+                                }
+                                return newCount;
+                            });
                         }
 
-                        if (success) {
-                            successTriggered.current = true;
-                            setStatus("✅ Challenge successful! Securing Identity...");
-                            
-                            const imageSrc = canvasRef.current.toDataURL("image/jpeg", 0.9);
-                            
-                            if (cameraRef.current) {
-                                cameraRef.current.stop();
+                        setBlinkCount(currentCount => {
+                            if (currentCount === 0) {
+                                setStatus("Place your face in the circle and blink 2 times.");
                             }
                             
-                            setTimeout(async () => {
-                                try {
-                                    const img = new Image();
-                                    img.src = imageSrc;
-                                    await new Promise((resolve) => { img.onload = resolve; });
-
-                                    const detection = await faceapi.detectSingleFace(img)
-                                        .withFaceLandmarks()
-                                        .withFaceDescriptor();
-                                        
-                                    if (detection) {
-                                        const embeddingArray = Array.from(detection.descriptor);
-                                        setStatus("✅ Identity secured!");
-                                        setTimeout(() => {
-                                            onChallengeSuccess(imageSrc, embeddingArray);
-                                        }, 500);
-                                    } else {
-                                        setStatus("❌ Identity extraction failed. Try again.");
-                                        setTimeout(() => {
-                                            successTriggered.current = false;
-                                            if (cameraRef.current) cameraRef.current.start();
-                                        }, 2000);
-                                    }
-                                } catch (e) {
-                                    console.error(e);
-                                    setStatus("❌ Error securing identity.");
+                            if (currentCount >= 2 && !successTriggered.current) {
+                                successTriggered.current = true;
+                                setStatus("✅ 2 Blinks detected! Securing Identity...");
+                                
+                                const imageSrc = canvasRef.current.toDataURL("image/jpeg", 0.9);
+                                
+                                if (cameraRef.current) {
+                                    cameraRef.current.stop();
                                 }
-                            }, 100);
-                        }
+                                
+                                setTimeout(async () => {
+                                    try {
+                                        const img = new Image();
+                                        img.src = imageSrc;
+                                        await new Promise((resolve) => { img.onload = resolve; });
+
+                                        const detection = await faceapi.detectSingleFace(img)
+                                            .withFaceLandmarks()
+                                            .withFaceDescriptor();
+                                            
+                                        if (detection) {
+                                            const embeddingArray = Array.from(detection.descriptor);
+                                            setStatus("✅ Identity secured!");
+                                            setTimeout(() => {
+                                                onChallengeSuccess(imageSrc, embeddingArray);
+                                            }, 500);
+                                        } else {
+                                            setStatus("❌ Identity extraction failed. Try again.");
+                                            setTimeout(() => {
+                                                successTriggered.current = false;
+                                                setBlinkCount(0);
+                                                if (cameraRef.current) cameraRef.current.start();
+                                            }, 2000);
+                                        }
+                                    } catch (e) {
+                                        console.error(e);
+                                        setStatus("❌ Error securing identity.");
+                                    }
+                                }, 100);
+                            }
+                            return currentCount;
+                        });
+                        
                     } else {
                         setStatus("Face not detected. Please look at the camera.");
                     }
@@ -202,7 +210,9 @@ export default function FacialChallenge({ onChallengeSuccess }) {
                     style={{ transform: 'scaleX(-1)' }} 
                 ></canvas>
                 {!successTriggered.current && (
-                    <div className="absolute inset-0 pointer-events-none border-[3px] border-dashed border-blue-400 opacity-50 rounded-2xl m-4"></div>
+                    <div className="absolute inset-0 pointer-events-none flex items-center justify-center overflow-hidden">
+                        <div className="w-64 h-64 border-4 border-blue-400 border-dashed rounded-full shadow-[0_0_0_9999px_rgba(0,0,0,0.5)]"></div>
+                    </div>
                 )}
             </div>
             <p className="text-gray-500 mt-4 text-sm text-center">

@@ -366,7 +366,7 @@ def mark_attendance(request):
         session=session
     )
 
-    DISTANCE_THRESHOLD = 0.6  # Standard threshold for face-api.js euclidean distance
+    DISTANCE_THRESHOLD = 0.75  # Increased threshold to catch same person in different lighting
 
     for stored_face in stored_faces:
         if stored_face.embedding and isinstance(stored_face.embedding, list) and len(stored_face.embedding) > 0:
