@@ -502,47 +502,24 @@ def export_excel(request):
         section=section
     )
 
-    data = []
+    response = HttpResponse(content_type="text/csv")
+    filename = f"{department}_{section}_Attendance.csv"
+    response["Content-Disposition"] = f'attachment; filename="{filename}"'
 
+    import csv
+    writer = csv.writer(response)
+    writer.writerow(["Name", "Roll Number", "Department", "Section", "Attendance Time"])
+    
     for record in records:
+        writer.writerow([
+            record.name,
+            record.roll_number,
+            record.department,
+            record.section,
+            record.attendance_time.strftime("%I:%M:%S %p")
+        ])
 
-        data.append({
-
-    "Name": record.name,
-
-    "Roll Number": record.roll_number,
-
-    "Department": record.department,
-
-    "Section": record.section,
-
-    "Attendance Time": record.attendance_time.strftime("%I:%M:%S %p")
-
-    })
-
-    df = pd.DataFrame(data)
-
-    response = HttpResponse(
-        content_type=
-        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    )
-
-    filename = (
-        f"{department}_{section}_Attendance.xlsx"
-    )
-
-    response[
-        "Content-Disposition"
-    ] = (
-        f'attachment; filename="{filename}"'
-    )
-
-    df.to_excel(
-        response,
-        index=False
-    )
-
-    return response 
+    return response
 
 
 @api_view(["POST"])
