@@ -275,15 +275,15 @@ def mark_attendance(request):
     session_id = request.data.get("session_id")
     roll_number = request.data.get("roll_number")
     device_id = request.data.get("device_id")
-    face_embedding = request.data.get("face_embedding")
+    face_image = request.data.get("face_image")
 
     # ----------------------------
-    # Validate Face Embedding
+    # Validate Face Image
     # ----------------------------
-    if not face_embedding or not isinstance(face_embedding, list):
+    if not face_image:
         return Response(
             {
-                "message": "Face embedding (list of numbers) is required."
+                "message": "Face image is required."
             },
             status=400
         )
@@ -321,39 +321,7 @@ def mark_attendance(request):
             status=400
         )
 
-    # ----------------------------
-    # Use Face Embedding from Request
-    # ----------------------------
-    current_embedding = face_embedding
 
-    # ----------------------------
-    # Duplicate Face Check
-    # ----------------------------
-    stored_faces = SessionFace.objects.filter(
-        session=session
-    )
-
-    SIMILARITY_THRESHOLD = 0.65
-
-    for stored_face in stored_faces:
-
-        similarity = cosine_similarity(
-            current_embedding,
-            stored_face.embedding
-        )
-
-        print(
-            f"Similarity : {similarity}"
-        )
-
-        if similarity >= SIMILARITY_THRESHOLD:
-
-            return Response(
-                {
-                    "message": "You have already attempted attendance for this session."
-                },
-                status=400
-            )
 
     # ----------------------------
     # Roll Number Check
@@ -400,12 +368,12 @@ def mark_attendance(request):
         attendance = serializer.save()
 
         # ----------------------------
-        # Save Face Embedding
+        # Save Face Reference
         # ----------------------------
         SessionFace.objects.create(
             session=session,
             attendance=attendance,
-            embedding=current_embedding
+            embedding=[]
         )
 
         return Response(
