@@ -1,7 +1,11 @@
 import axios from "axios";
 
+const baseURL = import.meta.env.MODE === 'development' 
+    ? '/api/' 
+    : 'https://attendance-magic.vercel.app/api/';
+
 const API = axios.create({
-    baseURL: "https://attendance-magic.vercel.app/api/",
+    baseURL: baseURL,
 });
 
 API.interceptors.request.use((config) => {

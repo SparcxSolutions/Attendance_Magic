@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import API from "../services/api";
+import { toast, Toaster } from "react-hot-toast";
 
 function Login() {
 
@@ -9,11 +10,13 @@ function Login() {
     const [username, setUsername] = useState("");
     const [password, setPassword] = useState("");
     const [message, setMessage] = useState("");
+    const [loading, setLoading] = useState(false);
 
     const login = async () => {
+        setLoading(true);
+        const loadingToast = toast.loading("Processing...");
 
         try {
-
             const response = await API.post(
                 "login/",
                 {
@@ -32,14 +35,16 @@ function Login() {
                 response.data.refresh
             );
 
+            toast.success("Login Successful!", { id: loadingToast });
             navigate("/faculty");
 
         }
-
         catch (error) {
-
+            toast.error("Invalid Username or Password", { id: loadingToast });
             setMessage("Invalid Username or Password");
 
+        } finally {
+            setLoading(false);
         }
 
     };
@@ -47,6 +52,7 @@ function Login() {
     return (
 
         <div className="min-h-screen bg-gradient-to-br from-blue-700 via-blue-600 to-indigo-700 flex items-center justify-center">
+            <Toaster position="top-center" />
 
             <div className="bg-white shadow-2xl rounded-3xl p-10 w-[420px]">
 
@@ -133,12 +139,13 @@ function Login() {
                 <button
 
                     onClick={login}
+                    disabled={loading}
 
-                    className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl mt-8 transition"
+                    className={`w-full ${loading ? 'bg-blue-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'} text-white font-bold py-3 rounded-xl mt-8 transition`}
 
                 >
 
-                    Login
+                    {loading ? "Processing..." : "Login"}
 
                 </button>
 

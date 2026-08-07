@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from "react";
-import Webcam from "react-webcam";
 import { useParams } from "react-router-dom";
 import API from "../services/api";
+import FacialChallenge from "../components/FacialChallenge";
 
 function StudentAttendance() {
 
@@ -19,7 +19,10 @@ function StudentAttendance() {
 
     const [verified, setVerified] = useState(false);
     const [distance, setDistance] = useState(null);
-    const webcamRef = useRef(null);
+    
+    const [challengePassed, setChallengePassed] = useState(false);
+    const [verifyingFace, setVerifyingFace] = useState(false);
+    const [faceVerified, setFaceVerified] = useState(false);
 
     const [faceImage, setFaceImage] = useState(null);
     const deviceId = (() => {
@@ -263,19 +266,30 @@ if (loading) {
 
     }
 
-const captureFace = () => {
+const handleChallengeSuccess = async (imageSrc) => {
+    setFaceImage(imageSrc);
+    setChallengePassed(true);
+    setVerifyingFace(true);
 
-    const image = webcamRef.current.getScreenshot();
-
-    if (!image) {
-        alert("Unable to capture image.");
-        return;
+    try {
+        await API.post("mark-attendance/", {
+            session_id: id,
+            device_id: deviceId,
+            face_image: imageSrc
+        });
+        
+    } catch (error) {
+        if (error.response?.data?.errors) {
+            // Validation errors for missing name/roll mean face duplicate check passed!
+            setFaceVerified(true);
+        } else {
+            alert(error.response?.data?.message || "Face Verification Failed");
+            setChallengePassed(false);
+            setFaceImage(null);
+        }
+    } finally {
+        setVerifyingFace(false);
     }
-
-    setFaceImage(image);
-
-    alert("Face captured successfully.");
-
 };
 const markAttendance = async () => {
 
@@ -556,39 +570,33 @@ if (attendanceDone) {
 
                     }
 
-                    {                        verified && (
-
+                    {                        verified && !faceVerified && (
                             <>
-
                                 <hr className="my-8" />
                                 <div className="mb-6">
+                                    <h2 className="text-2xl font-bold mb-4">Live Face Verification</h2>
+                                    
+                                    {!challengePassed ? (
+                                        <FacialChallenge onChallengeSuccess={handleChallengeSuccess} />
+                                    ) : verifyingFace ? (
+                                        <div className="text-center py-10">
+                                            <div className="text-2xl mb-4 animate-pulse">⏳ Verifying Face with Backend...</div>
+                                        </div>
+                                    ) : (
+                                        <p className="text-red-600 font-semibold mt-3">❌ Verification Failed. Please refresh and try again.</p>
+                                    )}
+                                </div>
+                            </>
+                        )
+                    }
 
-    <h2 className="text-2xl font-bold mb-4">
-
-        Face Verification
-
-    </h2>
-
-    <Webcam
-        ref={webcamRef}
-        screenshotFormat="image/jpeg"
-        className="w-full rounded-xl border"
-    />
-
-    <button
-        onClick={captureFace}
-        className="w-full mt-4 bg-purple-600 hover:bg-purple-700 text-white py-3 rounded-xl"
-    >
-        📸 Capture Face
-    </button>
-
-    {faceImage && (
-        <p className="text-green-600 font-semibold mt-3">
-            ✅ Face Captured Successfully
-        </p>
-    )}
-
-</div>
+                    {
+                        verified && faceVerified && (
+                            <>
+                                <hr className="my-8" />
+                                <div className="mb-6">
+                                    <h2 className="text-2xl font-bold mb-4 text-green-600">✅ Live Verification Successful</h2>
+                                </div>
 
                                 <h2 className="text-2xl font-bold mb-6">
 
