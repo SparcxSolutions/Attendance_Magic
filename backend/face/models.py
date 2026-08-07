@@ -18,11 +18,6 @@ class SessionFace(models.Model):
 
     embedding = models.JSONField()
 
-    image_url = models.URLField(
-        blank=True,
-        null=True
-    )
-
     created_at = models.DateTimeField(
         auto_now_add=True
     )

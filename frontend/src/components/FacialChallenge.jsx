@@ -1,32 +1,24 @@
 import { useEffect, useRef, useState } from "react";
-import * as faceapi from '@vladmandic/face-api';
+
+const CHALLENGES = [
+    { id: "TURN_LEFT", text: "Turn Head Left" },
+    { id: "TURN_RIGHT", text: "Turn Head Right" },
+    { id: "LOOK_UP", text: "Look Up" },
+    { id: "LOOK_DOWN", text: "Look Down" }
+];
 
 export default function FacialChallenge({ onChallengeSuccess }) {
     const videoRef = useRef(null);
     const canvasRef = useRef(null);
-    const [blinkCount, setBlinkCount] = useState(0);
+    const [challenge, setChallenge] = useState(null);
     const [status, setStatus] = useState("Initializing camera...");
-    const [canCapture, setCanCapture] = useState(false);
-    const [isCapturing, setIsCapturing] = useState(false);
     const cameraRef = useRef(null);
     const successTriggered = useRef(false);
     const faceMeshRef = useRef(null);
-    const lastBlinkState = useRef(false);
 
     useEffect(() => {
-
-        const loadFaceApiModels = async () => {
-            try {
-                const modelUrl = 'https://unpkg.com/@vladmandic/face-api/model/';
-                await faceapi.nets.tinyFaceDetector.loadFromUri(modelUrl);
-                await faceapi.nets.faceLandmark68Net.loadFromUri(modelUrl);
-                await faceapi.nets.faceRecognitionNet.loadFromUri(modelUrl);
-                console.log("Face-API models loaded");
-            } catch (error) {
-                console.error("Error loading face-api models:", error);
-            }
-        };
-        loadFaceApiModels();
+        const randomChallenge = CHALLENGES[Math.floor(Math.random() * CHALLENGES.length)];
+        setChallenge(randomChallenge);
 
         const loadScript = (src) => {
             return new Promise((resolve, reject) => {
@@ -76,58 +68,51 @@ export default function FacialChallenge({ onChallengeSuccess }) {
                     }
 
                     if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {
+                        setStatus(`Challenge: ${randomChallenge.text}`);
                         const landmarks = results.multiFaceLandmarks[0];
                         
-                        // EAR calculation
-                        const dist = (p1, p2) => Math.hypot(p1.x - p2.x, p1.y - p2.y);
-                        const getEAR = (indices) => {
-                            const p1 = landmarks[indices[0]];
-                            const p2 = landmarks[indices[1]];
-                            const p3 = landmarks[indices[2]];
-                            const p4 = landmarks[indices[3]];
-                            const p5 = landmarks[indices[4]];
-                            const p6 = landmarks[indices[5]];
-                            return (dist(p2, p6) + dist(p3, p5)) / (2.0 * dist(p1, p4));
-                        };
+                        const nose = landmarks[1];
+                        const leftCheek = landmarks[234];
+                        const rightCheek = landmarks[454];
+                        const topHead = landmarks[10];
+                        const bottomChin = landmarks[152];
 
-                        const leftEyeIndices = [33, 160, 158, 133, 153, 144];
-                        const rightEyeIndices = [362, 385, 387, 263, 373, 380];
-                        
-                        const leftEAR = getEAR(leftEyeIndices);
-                        const rightEAR = getEAR(rightEyeIndices);
-                        const avgEAR = (leftEAR + rightEAR) / 2.0;
+                        const leftDist = nose.x - leftCheek.x;
+                        const rightDist = rightCheek.x - nose.x;
+                        const yawRatio = leftDist / rightDist;
 
-                        const isBlinking = avgEAR < 0.22; // Threshold for a blink
+                        const topDist = nose.y - topHead.y;
+                        const bottomDist = bottomChin.y - nose.y;
+                        const pitchRatio = topDist / bottomDist;
+
+                        let success = false;
                         
-                        if (isBlinking && !lastBlinkState.current) {
-                            lastBlinkState.current = true;
-                        } else if (!isBlinking && lastBlinkState.current) {
-                            lastBlinkState.current = false;
-                            setBlinkCount(prev => {
-                                const newCount = prev + 1;
-                                if (newCount < 2) {
-                                    setStatus(`Blinks detected: ${newCount} / 2`);
-                                }
-                                return newCount;
-                            });
+                        if (randomChallenge.id === "TURN_LEFT") {
+                            if (yawRatio > 2.0) success = true;
+                        } else if (randomChallenge.id === "TURN_RIGHT") {
+                            if (yawRatio < 0.6) success = true; // slightly relaxed from 0.5
+                        } else if (randomChallenge.id === "LOOK_UP") {
+                            if (pitchRatio < 0.6) success = true;
+                        } else if (randomChallenge.id === "LOOK_DOWN") {
+                            if (pitchRatio > 1.8) success = true;
                         }
 
-                        setBlinkCount(currentCount => {
-                            if (currentCount === 0 && !canCapture) {
-                                setStatus("Place your face in the circle and blink 2 times.");
+                        if (success) {
+                            successTriggered.current = true;
+                            setStatus("✅ Challenge successful! Capturing...");
+                            
+                            const imageSrc = canvasRef.current.toDataURL("image/jpeg", 0.9);
+                            
+                            if (cameraRef.current) {
+                                cameraRef.current.stop();
                             }
                             
-                            if (currentCount >= 2 && !canCapture) {
-                                setCanCapture(true);
-                                setStatus("✅ 2 Blinks detected! Please click Capture below.");
-                            }
-                            return currentCount;
-                        });
-                        
-                    } else {
-                        if (!canCapture && !isCapturing) {
-                            setStatus("Face not detected. Please look at the camera.");
+                            setTimeout(() => {
+                                onChallengeSuccess(imageSrc);
+                            }, 800);
                         }
+                    } else {
+                        setStatus("Face not detected. Please look at the camera.");
                     }
                 });
 
@@ -162,55 +147,6 @@ export default function FacialChallenge({ onChallengeSuccess }) {
         };
     }, []);
 
-    const handleCapture = () => {
-        setIsCapturing(true);
-        setCanCapture(false);
-        successTriggered.current = true;
-        setStatus("Securing Identity... please wait.");
-        
-        const imageSrc = canvasRef.current.toDataURL("image/jpeg", 0.9);
-        
-        if (cameraRef.current) {
-            cameraRef.current.stop();
-        }
-        
-        // Give UI a chance to update before heavy computation
-        setTimeout(async () => {
-            try {
-                const img = new Image();
-                img.src = imageSrc;
-                await new Promise((resolve) => { img.onload = resolve; });
-
-                const detection = await faceapi.detectSingleFace(
-                    img, 
-                    new faceapi.TinyFaceDetectorOptions({ scoreThreshold: 0.2 })
-                )
-                    .withFaceLandmarks()
-                    .withFaceDescriptor();
-                    
-                if (detection) {
-                    const embeddingArray = Array.from(detection.descriptor);
-                    setStatus("✅ Identity secured!");
-                    setTimeout(() => {
-                        onChallengeSuccess(imageSrc, embeddingArray);
-                    }, 500);
-                } else {
-                    setStatus("❌ Identity extraction failed. Try again.");
-                    setTimeout(() => {
-                        setIsCapturing(false);
-                        setCanCapture(false);
-                        setBlinkCount(0);
-                        successTriggered.current = false;
-                        if (cameraRef.current) cameraRef.current.start();
-                    }, 2000);
-                }
-            } catch (e) {
-                console.error(e);
-                setStatus("❌ Error securing identity.");
-            }
-        }, 100);
-    };
-
     return (
         <div className="flex flex-col items-center">
             <h2 className="text-2xl font-bold mb-2">Live Verification</h2>
@@ -227,28 +163,9 @@ export default function FacialChallenge({ onChallengeSuccess }) {
                     style={{ transform: 'scaleX(-1)' }} 
                 ></canvas>
                 {!successTriggered.current && (
-                    <div className="absolute inset-0 pointer-events-none flex items-center justify-center overflow-hidden">
-                        <div className="w-64 h-64 border-4 border-blue-400 border-dashed rounded-full shadow-[0_0_0_9999px_rgba(0,0,0,0.5)]"></div>
-                    </div>
+                    <div className="absolute inset-0 pointer-events-none border-[3px] border-dashed border-blue-400 opacity-50 rounded-2xl m-4"></div>
                 )}
             </div>
-            
-            {canCapture && !isCapturing && (
-                <button 
-                    onClick={handleCapture}
-                    className="mt-4 px-6 py-3 bg-green-600 text-white text-lg font-bold rounded-lg shadow-md hover:bg-green-700 w-full max-w-md transition-colors"
-                >
-                    📸 Capture Image
-                </button>
-            )}
-            
-            {isCapturing && (
-                <div className="mt-4 flex items-center justify-center space-x-3 text-blue-600 font-bold w-full max-w-md">
-                    <div className="w-6 h-6 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-                    <span className="text-lg">Processing...</span>
-                </div>
-            )}
-            
             <p className="text-gray-500 mt-4 text-sm text-center">
                 Please ensure your face is clearly visible and follow the challenge above to mark your attendance.
             </p>

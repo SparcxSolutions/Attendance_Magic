@@ -43,7 +43,6 @@ INSTALLED_APPS = [
     "rest_framework",
     "corsheaders",
     "face",
-    "cloudinary",
 ]
 
 # =========================
@@ -175,17 +174,3 @@ SIMPLE_JWT = {
 }
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
-
-# =========================
-# CLOUDINARY
-# =========================
-
-import cloudinary
-import cloudinary.uploader
-import cloudinary.api
-
-cloudinary.config(
-  cloud_name = config("CLOUDINARY_CLOUD_NAME", default="dppiuypop"),
-  api_key = config("CLOUDINARY_API_KEY", default="412712715735329"),
-  api_secret = config("CLOUDINARY_API_SECRET", default="m04IUY0-awwtr4YoS-1xvxOOIzU")
-)
