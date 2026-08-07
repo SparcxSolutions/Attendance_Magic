@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from "react";
+import FacialChallenge from "../components/FacialChallenge";
 import { useParams } from "react-router-dom";
 import API from "../services/api";
-import FacialChallenge from "../components/FacialChallenge";
 
 function StudentAttendance() {
 
@@ -19,10 +19,6 @@ function StudentAttendance() {
 
     const [verified, setVerified] = useState(false);
     const [distance, setDistance] = useState(null);
-    
-    const [challengePassed, setChallengePassed] = useState(false);
-    const [verifyingFace, setVerifyingFace] = useState(false);
-    const [faceVerified, setFaceVerified] = useState(false);
 
     const [faceImage, setFaceImage] = useState(null);
     const deviceId = (() => {
@@ -152,6 +148,9 @@ setSection(response.data.section || "A");
                             longitude:
                                 position.coords.longitude,
 
+                            accuracy:
+                                position.coords.accuracy,
+
                         }
 
                     );
@@ -198,14 +197,16 @@ setSection(response.data.section || "A");
 
             },
 
-            () => {
-
+            (error) => {
                 alert(
-                    "Unable to fetch location."
+                    "Unable to fetch location: " + error.message
                 );
-
+            },
+            {
+                enableHighAccuracy: true,
+                timeout: 10000,
+                maximumAge: 0
             }
-
         );
 
     };
@@ -265,32 +266,6 @@ if (loading) {
         );
 
     }
-
-const handleChallengeSuccess = async (imageSrc) => {
-    setFaceImage(imageSrc);
-    setChallengePassed(true);
-    setVerifyingFace(true);
-
-    try {
-        await API.post("mark-attendance/", {
-            session_id: id,
-            device_id: deviceId,
-            face_image: imageSrc
-        });
-        
-    } catch (error) {
-        if (error.response?.data?.errors) {
-            // Validation errors for missing name/roll mean face duplicate check passed!
-            setFaceVerified(true);
-        } else {
-            alert(error.response?.data?.message || "Face Verification Failed");
-            setChallengePassed(false);
-            setFaceImage(null);
-        }
-    } finally {
-        setVerifyingFace(false);
-    }
-};
 const markAttendance = async () => {
 
     if (!verified) {
@@ -570,145 +545,85 @@ if (attendanceDone) {
 
                     }
 
-                    {                        verified && !faceVerified && (
+                    {                        verified && (
+
                             <>
+
                                 <hr className="my-8" />
                                 <div className="mb-6">
-                                    <h2 className="text-2xl font-bold mb-4">Live Face Verification</h2>
-                                    
-                                    {!challengePassed ? (
-                                        <FacialChallenge onChallengeSuccess={handleChallengeSuccess} />
-                                    ) : verifyingFace ? (
-                                        <div className="text-center py-10">
-                                            <div className="text-2xl mb-4 animate-pulse">⏳ Verifying Face with Backend...</div>
-                                        </div>
+                                    {!faceImage ? (
+                                        <FacialChallenge onChallengeSuccess={(img) => setFaceImage(img)} />
                                     ) : (
-                                        <p className="text-red-600 font-semibold mt-3">❌ Verification Failed. Please refresh and try again.</p>
+                                        <div className="text-center">
+                                            <h2 className="text-2xl font-bold mb-4">Face Verification</h2>
+                                            <img src={faceImage} alt="Captured Face" className="w-full rounded-xl border max-w-md mx-auto" />
+                                            <p className="text-green-600 font-semibold mt-3 text-lg">
+                                                ✅ Challenge Completed Successfully
+                                            </p>
+                                        </div>
                                     )}
                                 </div>
-                            </>
-                        )
-                    }
 
-                    {
-                        verified && faceVerified && (
-                            <>
-                                <hr className="my-8" />
-                                <div className="mb-6">
-                                    <h2 className="text-2xl font-bold mb-4 text-green-600">✅ Live Verification Successful</h2>
-                                </div>
-
-                                <h2 className="text-2xl font-bold mb-6">
-
-                                    Student Details
-
-                                </h2>
-
-                                <div className="space-y-5">
-
-                                    <div>
-
-                                        <label className="block font-semibold mb-2">
-
-                                            Full Name
-
-                                        </label>
-
-                                        <input
-                                            type="text"
-                                            className="w-full border rounded-xl p-3"
-                                            placeholder="Enter your full name"
-                                            value={name}
-                                            onChange={(e) =>
-                                                setName(e.target.value)
-                                            }
-                                        />
-
-                                    </div>
-
-                                    <div>
-
-                                        <label className="block font-semibold mb-2">
-
-                                            Roll Number
-
-                                        </label>
-
-                                        <input
-                                            type="text"
-                                            className="w-full border rounded-xl p-3"
-                                            placeholder="Enter Roll Number"
-                                            value={rollNumber}
-                                            onChange={(e) =>
-                                                setRollNumber(e.target.value)
-                                            }
-                                        />
-
-                                    </div>
-
-                                    <div>
-
-                                        <label className="block font-semibold mb-2">
-
-                                            Department
-
-                                        </label>
-
-                                        <select
-                                            className="w-full border rounded-xl p-3"
-                                            value={department}
-                                            onChange={(e) =>
-                                                setDepartment(e.target.value)
-                                            }
-                                        >
-
-                                            <option value="CSE">CSE</option>
-                                            <option value="CSD">CSD</option>
-                                            <option value="ECE">ECE</option>
-
-                                        </select>
-
-                                    </div>
-
-                                    <div>
-
-                                        <label className="block font-semibold mb-2">
-
-                                            Section
-
-                                        </label>
-
-                                        <select
-                                            className="w-full border rounded-xl p-3"
-                                            value={section}
-                                            onChange={(e) =>
-                                                setSection(e.target.value)
-                                            }
-                                        >
-
-                                            <option value="A">A</option>
-                                            <option value="B">B</option>
-                                            <option value="C">C</option>
-                                            <option value="D">D</option>
-
-                                        </select>
-
-                                    </div>
-
-                                    <button
-
-                                    onClick={markAttendance}
-
-                                    className="w-full bg-green-600 hover:bg-green-700 text-white py-3 rounded-xl text-lg font-semibold"
-
-                                    >
-
-                                    ✅ Mark Attendance
-
-                                    </button>
-
-                                </div>
-
+                                {faceImage && (
+                                    <>
+                                        <h2 className="text-2xl font-bold mb-6">
+                                            Student Details
+                                        </h2>
+                                        <div className="space-y-5">
+                                            <div>
+                                                <label className="block font-semibold mb-2">Full Name</label>
+                                                <input
+                                                    type="text"
+                                                    className="w-full border rounded-xl p-3"
+                                                    placeholder="Enter your full name"
+                                                    value={name}
+                                                    onChange={(e) => setName(e.target.value)}
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block font-semibold mb-2">Roll Number</label>
+                                                <input
+                                                    type="text"
+                                                    className="w-full border rounded-xl p-3"
+                                                    placeholder="Enter Roll Number"
+                                                    value={rollNumber}
+                                                    onChange={(e) => setRollNumber(e.target.value)}
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block font-semibold mb-2">Department</label>
+                                                <select
+                                                    className="w-full border rounded-xl p-3"
+                                                    value={department}
+                                                    onChange={(e) => setDepartment(e.target.value)}
+                                                >
+                                                    <option value="CSE">CSE</option>
+                                                    <option value="CSD">CSD</option>
+                                                    <option value="ECE">ECE</option>
+                                                </select>
+                                            </div>
+                                            <div>
+                                                <label className="block font-semibold mb-2">Section</label>
+                                                <select
+                                                    className="w-full border rounded-xl p-3"
+                                                    value={section}
+                                                    onChange={(e) => setSection(e.target.value)}
+                                                >
+                                                    <option value="A">A</option>
+                                                    <option value="B">B</option>
+                                                    <option value="C">C</option>
+                                                    <option value="D">D</option>
+                                                </select>
+                                            </div>
+                                            <button
+                                                onClick={markAttendance}
+                                                className="w-full bg-green-600 hover:bg-green-700 text-white py-3 rounded-xl text-lg font-semibold"
+                                            >
+                                                ✅ Mark Attendance
+                                            </button>
+                                        </div>
+                                    </>
+                                )}
                             </>
 
                         )

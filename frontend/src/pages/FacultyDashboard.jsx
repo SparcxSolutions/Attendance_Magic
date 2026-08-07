@@ -32,8 +32,24 @@ const [selectedSection, setSelectedSection] = useState(null);
     useEffect(() => {
 
         fetchSummary();
+        checkActiveSession();
 
     }, []);
+
+    const checkActiveSession = async () => {
+        try {
+            const response = await API.get("active-session/");
+            if (response.data && response.data.id) {
+                setSessionActive(true);
+                setExpiresAt(response.data.expires_at);
+                const link = `https://attendance-magic-c8tj.vercel.app/attendance/${response.data.id}`;
+                setAttendanceLink(link);
+            }
+        } catch (error) {
+            // No active session found - that's fine
+            setSessionActive(false);
+        }
+    };
 
     useEffect(() => {
 
@@ -161,90 +177,62 @@ useEffect(() => {
     const startSession = () => {
 
         if (!navigator.geolocation) {
-
             alert("Geolocation is not supported by your browser.");
-
             return;
-
         }
 
         navigator.geolocation.getCurrentPosition(
-
             async (position) => {
-
                 try {
-
                     const response = await API.post(
-
                         "start-session/",
-
                         {
-
-                            faculty_latitude:
-                                position.coords.latitude,
-
-                            faculty_longitude:
-                                position.coords.longitude,
-
+                            faculty_latitude: position.coords.latitude,
+                            faculty_longitude: position.coords.longitude,
                             radius,
-
                             duration_minutes: duration
-
                         }
-
                     );
 
-                    console.log(
-
-                        "Faculty Location:",
-
-                        position.coords.latitude,
-
-                        position.coords.longitude
-
-                    );
-
-                    setAttendanceLink(
-                        response.data.attendance_link
-                    );
-
-                    setExpiresAt(
-                        response.data.data.expires_at
-                    );
-
+                    setAttendanceLink(response.data.attendance_link);
+                    setExpiresAt(response.data.data.expires_at);
                     setSessionActive(true);
-
-                    alert(
-                        "Attendance Session Started"
-                    );
-
+                    alert("Attendance Session Started");
                     fetchSummary();
-
+                } catch (error) {
+                    const msg = error.response?.data?.message || "";
+                    // If a session is already active, resume it instead of creating a new one
+                    if (msg.toLowerCase().includes("already active")) {
+                        try {
+                            const activeRes = await API.get("active-session/");
+                            if (activeRes.data && activeRes.data.id) {
+                                const link = `https://attendance-magic-c8tj.vercel.app/attendance/${activeRes.data.id}`;
+                                setAttendanceLink(link);
+                                setExpiresAt(activeRes.data.expires_at);
+                                setSessionActive(true);
+                                alert("A session is already active. Showing existing session.");
+                            }
+                        } catch (resumeError) {
+                            alert("Unable to resume active session. Please try again.");
+                        }
+                    } else {
+                        const errorMsg = msg
+                            || error.response?.data?.detail
+                            || JSON.stringify(error.response?.data)
+                            || "Unknown error. Please check your connection.";
+                        alert("Unable to Start Session: " + errorMsg);
+                    }
                 }
-
-                catch (error) {
-
-    console.log(error.response);
-
-    console.log(error.response?.data);
-
-    alert("Unable to Start Session");
-
-}
-
             },
-
-            () => {
-
-                alert(
-                    "Please allow location access."
-                );
-
+            (error) => {
+                alert("Please allow location access: " + error.message);
+            },
+            {
+                enableHighAccuracy: true,
+                timeout: 10000,
+                maximumAge: 0
             }
-
         );
-        
-
     };
     const endSession = async () => {
 

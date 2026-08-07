@@ -198,6 +198,7 @@ def verify_location(request):
     session_id = request.data.get("session_id")
     student_lat = request.data.get("latitude")
     student_lon = request.data.get("longitude")
+    gps_accuracy = request.data.get("accuracy", 0)
 
     if not session_id:
         return Response(
@@ -235,10 +236,27 @@ def verify_location(request):
         float(student_lon)
     )
 
+    # GPS accuracy buffer:
+    # Consumer GPS is inherently imprecise (3-50+ meters).
+    # We add the device's reported accuracy as a buffer,
+    # and enforce a minimum effective radius of 50 meters
+    # to prevent false rejections from GPS drift.
+    MIN_EFFECTIVE_RADIUS = 50
+    try:
+        accuracy_buffer = float(gps_accuracy)
+    except (TypeError, ValueError):
+        accuracy_buffer = 0
+
+    effective_radius = max(
+        session.radius + accuracy_buffer,
+        MIN_EFFECTIVE_RADIUS
+    )
+
     return Response({
-        "verified": distance <= session.radius,
+        "verified": distance <= effective_radius,
         "distance": round(distance, 2),
         "radius": session.radius,
+        "effective_radius": round(effective_radius, 2),
         "department": session.department,
         "section": session.section
     })

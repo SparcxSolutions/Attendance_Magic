@@ -1,176 +1,174 @@
-import React, { useEffect, useRef, useState } from 'react';
-import Webcam from 'react-webcam';
+import { useEffect, useRef, useState } from "react";
 
 const CHALLENGES = [
-    { id: 'left', text: 'Turn Head Left ⬅️' },
-    { id: 'right', text: 'Turn Head Right ➡️' },
-    { id: 'up', text: 'Look Up ⬆️' },
-    { id: 'down', text: 'Look Down ⬇️' }
+    { id: "TURN_LEFT", text: "Turn Head Left" },
+    { id: "TURN_RIGHT", text: "Turn Head Right" },
+    { id: "LOOK_UP", text: "Look Up" },
+    { id: "LOOK_DOWN", text: "Look Down" }
 ];
 
-const loadScript = (src) => {
-    return new Promise((resolve, reject) => {
-        if (document.querySelector(`script[src="${src}"]`)) return resolve();
-        const script = document.createElement('script');
-        script.src = src;
-        script.crossOrigin = 'anonymous';
-        script.onload = resolve;
-        script.onerror = reject;
-        document.body.appendChild(script);
-    });
-};
-
 export default function FacialChallenge({ onChallengeSuccess }) {
-    const webcamRef = useRef(null);
+    const videoRef = useRef(null);
     const canvasRef = useRef(null);
     const [challenge, setChallenge] = useState(null);
-    const isDetectingRef = useRef(true);
-    const challengeRef = useRef(null);
+    const [status, setStatus] = useState("Initializing camera...");
+    const cameraRef = useRef(null);
     const successTriggered = useRef(false);
+    const faceMeshRef = useRef(null);
 
     useEffect(() => {
-        let faceMesh = null;
-        let camera = null;
+        const randomChallenge = CHALLENGES[Math.floor(Math.random() * CHALLENGES.length)];
+        setChallenge(randomChallenge);
+
+        const loadScript = (src) => {
+            return new Promise((resolve, reject) => {
+                if (document.querySelector(`script[src="${src}"]`)) {
+                    resolve();
+                    return;
+                }
+                const script = document.createElement("script");
+                script.src = src;
+                script.crossOrigin = "anonymous";
+                script.onload = () => resolve();
+                script.onerror = () => reject(new Error(`Failed to load ${src}`));
+                document.body.appendChild(script);
+            });
+        };
 
         const initMediaPipe = async () => {
             try {
-                await loadScript('https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js');
-                await loadScript('https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js');
-
-                // Randomly select a challenge
-                const randomChallenge = CHALLENGES[Math.floor(Math.random() * CHALLENGES.length)];
-                setChallenge(randomChallenge);
-                challengeRef.current = randomChallenge;
-
+                await loadScript("https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js");
+                await loadScript("https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js");
+                
                 const FaceMesh = window.FaceMesh;
                 const Camera = window.Camera;
 
-                faceMesh = new FaceMesh({
-                    locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`
+                faceMeshRef.current = new FaceMesh({
+                    locateFile: (file) => {
+                        return `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`;
+                    }
                 });
 
-                faceMesh.setOptions({
+                faceMeshRef.current.setOptions({
                     maxNumFaces: 1,
                     refineLandmarks: true,
                     minDetectionConfidence: 0.5,
                     minTrackingConfidence: 0.5
                 });
 
-                faceMesh.onResults(onResults);
+                faceMeshRef.current.onResults((results) => {
+                    if (successTriggered.current) return;
+                    
+                    if (canvasRef.current && videoRef.current) {
+                        const canvasCtx = canvasRef.current.getContext('2d');
+                        canvasRef.current.width = videoRef.current.videoWidth;
+                        canvasRef.current.height = videoRef.current.videoHeight;
+                        canvasCtx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+                        canvasCtx.drawImage(results.image, 0, 0, canvasRef.current.width, canvasRef.current.height);
+                    }
 
-                if (webcamRef.current && webcamRef.current.video) {
-                    camera = new Camera(webcamRef.current.video, {
+                    if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {
+                        setStatus(`Challenge: ${randomChallenge.text}`);
+                        const landmarks = results.multiFaceLandmarks[0];
+                        
+                        const nose = landmarks[1];
+                        const leftCheek = landmarks[234];
+                        const rightCheek = landmarks[454];
+                        const topHead = landmarks[10];
+                        const bottomChin = landmarks[152];
+
+                        const leftDist = nose.x - leftCheek.x;
+                        const rightDist = rightCheek.x - nose.x;
+                        const yawRatio = leftDist / rightDist;
+
+                        const topDist = nose.y - topHead.y;
+                        const bottomDist = bottomChin.y - nose.y;
+                        const pitchRatio = topDist / bottomDist;
+
+                        let success = false;
+                        
+                        if (randomChallenge.id === "TURN_LEFT") {
+                            if (yawRatio > 2.0) success = true;
+                        } else if (randomChallenge.id === "TURN_RIGHT") {
+                            if (yawRatio < 0.6) success = true; // slightly relaxed from 0.5
+                        } else if (randomChallenge.id === "LOOK_UP") {
+                            if (pitchRatio < 0.6) success = true;
+                        } else if (randomChallenge.id === "LOOK_DOWN") {
+                            if (pitchRatio > 1.8) success = true;
+                        }
+
+                        if (success) {
+                            successTriggered.current = true;
+                            setStatus("✅ Challenge successful! Capturing...");
+                            
+                            const imageSrc = canvasRef.current.toDataURL("image/jpeg", 0.9);
+                            
+                            if (cameraRef.current) {
+                                cameraRef.current.stop();
+                            }
+                            
+                            setTimeout(() => {
+                                onChallengeSuccess(imageSrc);
+                            }, 800);
+                        }
+                    } else {
+                        setStatus("Face not detected. Please look at the camera.");
+                    }
+                });
+
+                if (videoRef.current) {
+                    const camera = new Camera(videoRef.current, {
                         onFrame: async () => {
-                            if (webcamRef.current && webcamRef.current.video && isDetectingRef.current) {
-                                try {
-                                    await faceMesh.send({ image: webcamRef.current.video });
-                                } catch (err) {
-                                    console.error(err);
-                                }
+                            if (videoRef.current && !successTriggered.current && faceMeshRef.current) {
+                                await faceMeshRef.current.send({ image: videoRef.current });
                             }
                         },
                         width: 640,
                         height: 480
                     });
                     camera.start();
+                    cameraRef.current = camera;
                 }
-            } catch (err) {
-                console.error("Failed to load MediaPipe", err);
+            } catch (error) {
+                console.error("Failed to load MediaPipe:", error);
+                setStatus("Failed to load tracking modules. Please refresh.");
             }
         };
 
         initMediaPipe();
 
         return () => {
-            isDetectingRef.current = false;
-            if (camera) {
-                camera.stop();
+            if (cameraRef.current) {
+                cameraRef.current.stop();
             }
-            if (faceMesh) {
-                faceMesh.close();
+            if (faceMeshRef.current) {
+                faceMeshRef.current.close();
             }
         };
     }, []);
 
-    const getDistance = (p1, p2) => {
-        return Math.sqrt(Math.pow(p1.x - p2.x, 2) + Math.pow(p1.y - p2.y, 2));
-    };
-
-    const onResults = (results) => {
-        if (!isDetectingRef.current) return;
-        
-        const canvasCtx = canvasRef.current?.getContext('2d');
-        if (canvasCtx && canvasRef.current) {
-            canvasCtx.save();
-            canvasCtx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
-            canvasCtx.restore();
-        }
-
-        if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {
-            const landmarks = results.multiFaceLandmarks[0];
-            checkChallenge(landmarks);
-        }
-    };
-
-    const checkChallenge = (landmarks) => {
-        if (!challengeRef.current || successTriggered.current) return;
-
-        const nose = landmarks[1];
-        const leftCheek = landmarks[234];
-        const rightCheek = landmarks[454];
-        const topFace = landmarks[10];
-        const chin = landmarks[152];
-
-        const distLeft = getDistance(nose, leftCheek);
-        const distRight = getDistance(nose, rightCheek);
-        const distTop = getDistance(nose, topFace);
-        const distBottom = getDistance(nose, chin);
-
-        let passed = false;
-        const currentChallenge = challengeRef.current.id;
-
-        // Tuning thresholds
-        if (currentChallenge === 'left' && distRight / distLeft > 1.7) {
-            passed = true;
-        } else if (currentChallenge === 'right' && distLeft / distRight > 1.7) {
-            passed = true;
-        } else if (currentChallenge === 'up' && distBottom / distTop > 1.5) {
-            passed = true;
-        } else if (currentChallenge === 'down' && distTop / distBottom > 1.5) {
-            passed = true;
-        }
-
-        if (passed) {
-            successTriggered.current = true;
-            isDetectingRef.current = false;
-            
-            // Allow time for the user to stabilize their face after the challenge
-            setTimeout(() => {
-                const imageSrc = webcamRef.current.getScreenshot();
-                onChallengeSuccess(imageSrc);
-            }, 300);
-        }
-    };
-
     return (
-        <div className="relative w-full rounded-xl overflow-hidden border bg-gray-900 aspect-video">
-            <Webcam
-                ref={webcamRef}
-                screenshotFormat="image/jpeg"
-                className="w-full h-full object-cover"
-                videoConstraints={{ facingMode: "user" }}
-                mirrored={true}
-            />
-            <canvas
-                ref={canvasRef}
-                className="absolute top-0 left-0 w-full h-full object-cover pointer-events-none"
-            />
-            
-            <div className="absolute bottom-5 left-0 w-full text-center">
-                <div className="inline-block bg-white text-blue-700 px-6 py-2 rounded-full font-bold shadow-lg animate-pulse border-4 border-blue-200">
-                    {successTriggered.current ? "✅ Success! Capturing..." : (challenge ? challenge.text : "Initializing Camera...")}
-                </div>
+        <div className="flex flex-col items-center">
+            <h2 className="text-2xl font-bold mb-2">Live Verification</h2>
+            <div className={`p-4 rounded-xl font-bold mb-4 text-center w-full text-lg shadow-sm transition-colors duration-300 ${successTriggered.current ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-800'}`}>
+                {status}
             </div>
+            
+            <div className="relative rounded-2xl overflow-hidden shadow-xl border-4 border-white bg-black w-full max-w-md aspect-[4/3] flex items-center justify-center">
+                {/* Video is hidden, we use canvas to show mirrored feed for better UX */}
+                <video ref={videoRef} className="hidden" playsInline></video>
+                <canvas 
+                    ref={canvasRef} 
+                    className="w-full h-full object-cover"
+                    style={{ transform: 'scaleX(-1)' }} 
+                ></canvas>
+                {!successTriggered.current && (
+                    <div className="absolute inset-0 pointer-events-none border-[3px] border-dashed border-blue-400 opacity-50 rounded-2xl m-4"></div>
+                )}
+            </div>
+            <p className="text-gray-500 mt-4 text-sm text-center">
+                Please ensure your face is clearly visible and follow the challenge above to mark your attendance.
+            </p>
         </div>
     );
 }
