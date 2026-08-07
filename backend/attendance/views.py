@@ -5,7 +5,14 @@ from django.utils import timezone
 from datetime import timedelta
 from django.db.models import Count
 from face.models import SessionFace
-from face.services.insightface_service import face_service
+
+def cosine_similarity(vec1, vec2):
+    dot_product = sum(a * b for a, b in zip(vec1, vec2))
+    magnitude1 = sqrt(sum(a * a for a in vec1))
+    magnitude2 = sqrt(sum(b * b for b in vec2))
+    if magnitude1 == 0 or magnitude2 == 0:
+        return 0.0
+    return dot_product / (magnitude1 * magnitude2)
 
 import pandas as pd
 from django.http import HttpResponse
@@ -268,15 +275,15 @@ def mark_attendance(request):
     session_id = request.data.get("session_id")
     roll_number = request.data.get("roll_number")
     device_id = request.data.get("device_id")
-    face_image = request.data.get("face_image")
+    face_embedding = request.data.get("face_embedding")
 
     # ----------------------------
-    # Validate Face Image
+    # Validate Face Embedding
     # ----------------------------
-    if not face_image:
+    if not face_embedding or not isinstance(face_embedding, list):
         return Response(
             {
-                "message": "Face image is required."
+                "message": "Face embedding (list of numbers) is required."
             },
             status=400
         )
@@ -315,22 +322,9 @@ def mark_attendance(request):
         )
 
     # ----------------------------
-    # Generate Face Embedding
+    # Use Face Embedding from Request
     # ----------------------------
-    try:
-
-        current_embedding = face_service.image_to_embedding(
-            face_image
-        )
-
-    except Exception as e:
-
-        return Response(
-            {
-                "message": str(e)
-            },
-            status=400
-        )
+    current_embedding = face_embedding
 
     # ----------------------------
     # Duplicate Face Check
@@ -343,7 +337,7 @@ def mark_attendance(request):
 
     for stored_face in stored_faces:
 
-        similarity = face_service.similarity(
+        similarity = cosine_similarity(
             current_embedding,
             stored_face.embedding
         )
