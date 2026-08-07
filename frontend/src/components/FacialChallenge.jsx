@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import * as faceapi from '@vladmandic/face-api';
 
 const CHALLENGES = [
     { id: "TURN_LEFT", text: "Turn Head Left" },
@@ -19,6 +20,19 @@ export default function FacialChallenge({ onChallengeSuccess }) {
     useEffect(() => {
         const randomChallenge = CHALLENGES[Math.floor(Math.random() * CHALLENGES.length)];
         setChallenge(randomChallenge);
+
+        const loadFaceApiModels = async () => {
+            try {
+                const modelUrl = 'https://unpkg.com/@vladmandic/face-api/model/';
+                await faceapi.nets.ssdMobilenetv1.loadFromUri(modelUrl);
+                await faceapi.nets.faceLandmark68Net.loadFromUri(modelUrl);
+                await faceapi.nets.faceRecognitionNet.loadFromUri(modelUrl);
+                console.log("Face-API models loaded");
+            } catch (error) {
+                console.error("Error loading face-api models:", error);
+            }
+        };
+        loadFaceApiModels();
 
         const loadScript = (src) => {
             return new Promise((resolve, reject) => {
@@ -99,7 +113,7 @@ export default function FacialChallenge({ onChallengeSuccess }) {
 
                         if (success) {
                             successTriggered.current = true;
-                            setStatus("✅ Challenge successful! Capturing...");
+                            setStatus("✅ Challenge successful! Securing Identity...");
                             
                             const imageSrc = canvasRef.current.toDataURL("image/jpeg", 0.9);
                             
@@ -107,9 +121,34 @@ export default function FacialChallenge({ onChallengeSuccess }) {
                                 cameraRef.current.stop();
                             }
                             
-                            setTimeout(() => {
-                                onChallengeSuccess(imageSrc);
-                            }, 800);
+                            setTimeout(async () => {
+                                try {
+                                    const img = new Image();
+                                    img.src = imageSrc;
+                                    await new Promise((resolve) => { img.onload = resolve; });
+
+                                    const detection = await faceapi.detectSingleFace(img)
+                                        .withFaceLandmarks()
+                                        .withFaceDescriptor();
+                                        
+                                    if (detection) {
+                                        const embeddingArray = Array.from(detection.descriptor);
+                                        setStatus("✅ Identity secured!");
+                                        setTimeout(() => {
+                                            onChallengeSuccess(imageSrc, embeddingArray);
+                                        }, 500);
+                                    } else {
+                                        setStatus("❌ Identity extraction failed. Try again.");
+                                        setTimeout(() => {
+                                            successTriggered.current = false;
+                                            if (cameraRef.current) cameraRef.current.start();
+                                        }, 2000);
+                                    }
+                                } catch (e) {
+                                    console.error(e);
+                                    setStatus("❌ Error securing identity.");
+                                }
+                            }, 100);
                         }
                     } else {
                         setStatus("Face not detected. Please look at the camera.");

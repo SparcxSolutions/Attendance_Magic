@@ -21,6 +21,7 @@ function StudentAttendance() {
     const [distance, setDistance] = useState(null);
 
     const [faceImage, setFaceImage] = useState(null);
+    const [faceEmbedding, setFaceEmbedding] = useState(null);
     const deviceId = (() => {
 
     let id = localStorage.getItem("device_id");
@@ -295,7 +296,8 @@ const markAttendance = async () => {
                 department,
                 section,
                 device_id: deviceId,
-                face_image: faceImage
+                face_image: faceImage,
+                face_embedding: faceEmbedding
             }
         );
 
@@ -552,7 +554,10 @@ if (attendanceDone) {
                                 <hr className="my-8" />
                                 <div className="mb-6">
                                     {!faceImage ? (
-                                        <FacialChallenge onChallengeSuccess={(img) => setFaceImage(img)} />
+                                        <FacialChallenge onChallengeSuccess={(img, emb) => {
+                                            setFaceImage(img);
+                                            setFaceEmbedding(emb);
+                                        }} />
                                     ) : (
                                         <div className="text-center">
                                             <h2 className="text-2xl font-bold mb-4">Face Verification</h2>

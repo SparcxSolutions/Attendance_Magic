@@ -6,13 +6,10 @@ from datetime import timedelta
 from django.db.models import Count
 from face.models import SessionFace
 
-def cosine_similarity(vec1, vec2):
-    dot_product = sum(a * b for a, b in zip(vec1, vec2))
-    magnitude1 = sqrt(sum(a * a for a in vec1))
-    magnitude2 = sqrt(sum(b * b for b in vec2))
-    if magnitude1 == 0 or magnitude2 == 0:
-        return 0.0
-    return dot_product / (magnitude1 * magnitude2)
+def euclidean_distance(vec1, vec2):
+    if len(vec1) != len(vec2):
+        return 999.0
+    return sqrt(sum((a - b) ** 2 for a, b in zip(vec1, vec2)))
 
 
 from django.http import HttpResponse
@@ -276,6 +273,7 @@ def mark_attendance(request):
     roll_number = request.data.get("roll_number")
     device_id = request.data.get("device_id")
     face_image = request.data.get("face_image")
+    face_embedding = request.data.get("face_embedding")
 
     # ----------------------------
     # Validate Face Image
@@ -284,6 +282,14 @@ def mark_attendance(request):
         return Response(
             {
                 "message": "Face image is required."
+            },
+            status=400
+        )
+        
+    if not face_embedding or not isinstance(face_embedding, list):
+        return Response(
+            {
+                "message": "Face embedding (list of numbers) is required."
             },
             status=400
         )
@@ -354,6 +360,32 @@ def mark_attendance(request):
         )
 
     # ----------------------------
+    # Duplicate Face Check
+    # ----------------------------
+    stored_faces = SessionFace.objects.filter(
+        session=session
+    )
+
+    DISTANCE_THRESHOLD = 0.6  # Standard threshold for face-api.js euclidean distance
+
+    for stored_face in stored_faces:
+        if stored_face.embedding and isinstance(stored_face.embedding, list) and len(stored_face.embedding) > 0:
+            distance = euclidean_distance(
+                face_embedding,
+                stored_face.embedding
+            )
+
+            print(f"Face Distance : {distance}")
+
+            if distance < DISTANCE_THRESHOLD:
+                return Response(
+                    {
+                        "message": "You have already attempted attendance for this session."
+                    },
+                    status=400
+                )
+
+    # ----------------------------
     # Save Attendance
     # ----------------------------
     data = request.data.copy()
@@ -373,7 +405,7 @@ def mark_attendance(request):
         SessionFace.objects.create(
             session=session,
             attendance=attendance,
-            embedding=[]
+            embedding=face_embedding
         )
 
         return Response(
