@@ -183,7 +183,7 @@ useEffect(() => {
 
         navigator.geolocation.getCurrentPosition(
             async (position) => {
-                try {
+                const createSession = async () => {
                     const response = await API.post(
                         "start-session/",
                         {
@@ -194,27 +194,26 @@ useEffect(() => {
                         }
                     );
 
+                    console.log(
+                        "Faculty Location:",
+                        position.coords.latitude,
+                        position.coords.longitude
+                    );
+
                     setAttendanceLink(response.data.attendance_link);
                     setExpiresAt(response.data.data.expires_at);
                     setSessionActive(true);
                     alert("Attendance Session Started");
                     fetchSummary();
+                };
+
+                try {
+                    await createSession();
                 } catch (error) {
                     const msg = error.response?.data?.message || "";
-                    // If a session is already active, resume it instead of creating a new one
                     if (msg.toLowerCase().includes("already active")) {
-                        try {
-                            const activeRes = await API.get("active-session/");
-                            if (activeRes.data && activeRes.data.id) {
-                                const link = `https://attendance-magic-c8tj.vercel.app/attendance/${activeRes.data.id}`;
-                                setAttendanceLink(link);
-                                setExpiresAt(activeRes.data.expires_at);
-                                setSessionActive(true);
-                                alert("A session is already active. Showing existing session.");
-                            }
-                        } catch (resumeError) {
-                            alert("Unable to resume active session. Please try again.");
-                        }
+                        checkActiveSession();
+                        alert("An attendance session is already active.");
                     } else {
                         const errorMsg = msg
                             || error.response?.data?.detail
@@ -317,17 +316,15 @@ summary.forEach((item) => {
 
             </div>
 
-            <SessionForm
-
-                radius={radius}
-                duration={duration}
-
-                setRadius={setRadius}
-                setDuration={setDuration}
-
-                startSession={startSession}
-
-            />
+            {!sessionActive && (
+                <SessionForm
+                    radius={radius}
+                    duration={duration}
+                    setRadius={setRadius}
+                    setDuration={setDuration}
+                    startSession={startSession}
+                />
+            )}
 
             {
 
