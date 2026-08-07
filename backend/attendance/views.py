@@ -14,7 +14,7 @@ def cosine_similarity(vec1, vec2):
         return 0.0
     return dot_product / (magnitude1 * magnitude2)
 
-import pandas as pd
+
 from django.http import HttpResponse
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.decorators import permission_classes
