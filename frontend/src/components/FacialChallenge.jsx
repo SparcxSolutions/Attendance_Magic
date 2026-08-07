@@ -6,6 +6,8 @@ export default function FacialChallenge({ onChallengeSuccess }) {
     const canvasRef = useRef(null);
     const [blinkCount, setBlinkCount] = useState(0);
     const [status, setStatus] = useState("Initializing camera...");
+    const [canCapture, setCanCapture] = useState(false);
+    const [isCapturing, setIsCapturing] = useState(false);
     const cameraRef = useRef(null);
     const successTriggered = useRef(false);
     const faceMeshRef = useRef(null);
@@ -111,55 +113,21 @@ export default function FacialChallenge({ onChallengeSuccess }) {
                         }
 
                         setBlinkCount(currentCount => {
-                            if (currentCount === 0) {
+                            if (currentCount === 0 && !canCapture) {
                                 setStatus("Place your face in the circle and blink 2 times.");
                             }
                             
-                            if (currentCount >= 2 && !successTriggered.current) {
-                                successTriggered.current = true;
-                                setStatus("✅ 2 Blinks detected! Securing Identity...");
-                                
-                                const imageSrc = canvasRef.current.toDataURL("image/jpeg", 0.9);
-                                
-                                if (cameraRef.current) {
-                                    cameraRef.current.stop();
-                                }
-                                
-                                setTimeout(async () => {
-                                    try {
-                                        const img = new Image();
-                                        img.src = imageSrc;
-                                        await new Promise((resolve) => { img.onload = resolve; });
-
-                                        const detection = await faceapi.detectSingleFace(img, new faceapi.TinyFaceDetectorOptions())
-                                            .withFaceLandmarks()
-                                            .withFaceDescriptor();
-                                            
-                                        if (detection) {
-                                            const embeddingArray = Array.from(detection.descriptor);
-                                            setStatus("✅ Identity secured!");
-                                            setTimeout(() => {
-                                                onChallengeSuccess(imageSrc, embeddingArray);
-                                            }, 500);
-                                        } else {
-                                            setStatus("❌ Identity extraction failed. Try again.");
-                                            setTimeout(() => {
-                                                successTriggered.current = false;
-                                                setBlinkCount(0);
-                                                if (cameraRef.current) cameraRef.current.start();
-                                            }, 2000);
-                                        }
-                                    } catch (e) {
-                                        console.error(e);
-                                        setStatus("❌ Error securing identity.");
-                                    }
-                                }, 100);
+                            if (currentCount >= 2 && !canCapture) {
+                                setCanCapture(true);
+                                setStatus("✅ 2 Blinks detected! Please click Capture below.");
                             }
                             return currentCount;
                         });
                         
                     } else {
-                        setStatus("Face not detected. Please look at the camera.");
+                        if (!canCapture && !isCapturing) {
+                            setStatus("Face not detected. Please look at the camera.");
+                        }
                     }
                 });
 
@@ -194,6 +162,52 @@ export default function FacialChallenge({ onChallengeSuccess }) {
         };
     }, []);
 
+    const handleCapture = () => {
+        setIsCapturing(true);
+        setCanCapture(false);
+        successTriggered.current = true;
+        setStatus("Securing Identity... please wait.");
+        
+        const imageSrc = canvasRef.current.toDataURL("image/jpeg", 0.9);
+        
+        if (cameraRef.current) {
+            cameraRef.current.stop();
+        }
+        
+        // Give UI a chance to update before heavy computation
+        setTimeout(async () => {
+            try {
+                const img = new Image();
+                img.src = imageSrc;
+                await new Promise((resolve) => { img.onload = resolve; });
+
+                const detection = await faceapi.detectSingleFace(img, new faceapi.TinyFaceDetectorOptions())
+                    .withFaceLandmarks()
+                    .withFaceDescriptor();
+                    
+                if (detection) {
+                    const embeddingArray = Array.from(detection.descriptor);
+                    setStatus("✅ Identity secured!");
+                    setTimeout(() => {
+                        onChallengeSuccess(imageSrc, embeddingArray);
+                    }, 500);
+                } else {
+                    setStatus("❌ Identity extraction failed. Try again.");
+                    setTimeout(() => {
+                        setIsCapturing(false);
+                        setCanCapture(false);
+                        setBlinkCount(0);
+                        successTriggered.current = false;
+                        if (cameraRef.current) cameraRef.current.start();
+                    }, 2000);
+                }
+            } catch (e) {
+                console.error(e);
+                setStatus("❌ Error securing identity.");
+            }
+        }, 100);
+    };
+
     return (
         <div className="flex flex-col items-center">
             <h2 className="text-2xl font-bold mb-2">Live Verification</h2>
@@ -215,6 +229,23 @@ export default function FacialChallenge({ onChallengeSuccess }) {
                     </div>
                 )}
             </div>
+            
+            {canCapture && !isCapturing && (
+                <button 
+                    onClick={handleCapture}
+                    className="mt-4 px-6 py-3 bg-green-600 text-white text-lg font-bold rounded-lg shadow-md hover:bg-green-700 w-full max-w-md transition-colors"
+                >
+                    📸 Capture Image
+                </button>
+            )}
+            
+            {isCapturing && (
+                <div className="mt-4 flex items-center justify-center space-x-3 text-blue-600 font-bold w-full max-w-md">
+                    <div className="w-6 h-6 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                    <span className="text-lg">Processing...</span>
+                </div>
+            )}
+            
             <p className="text-gray-500 mt-4 text-sm text-center">
                 Please ensure your face is clearly visible and follow the challenge above to mark your attendance.
             </p>

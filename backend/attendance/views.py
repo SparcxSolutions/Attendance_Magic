@@ -11,6 +11,8 @@ def euclidean_distance(vec1, vec2):
         return 999.0
     return sqrt(sum((a - b) ** 2 for a, b in zip(vec1, vec2)))
 
+import cloudinary.uploader
+
 
 from django.http import HttpResponse
 from rest_framework.permissions import IsAuthenticated
@@ -366,7 +368,7 @@ def mark_attendance(request):
         session=session
     )
 
-    DISTANCE_THRESHOLD = 0.75  # Increased threshold to catch same person in different lighting
+    DISTANCE_THRESHOLD = 0.85  # Adjusted threshold for strict exact person matching
 
     for stored_face in stored_faces:
         if stored_face.embedding and isinstance(stored_face.embedding, list) and len(stored_face.embedding) > 0:
@@ -400,12 +402,24 @@ def mark_attendance(request):
         attendance = serializer.save()
 
         # ----------------------------
+        # Upload to Cloudinary
+        # ----------------------------
+        image_url = None
+        if face_image:
+            try:
+                upload_result = cloudinary.uploader.upload(face_image, folder="attendance_faces")
+                image_url = upload_result.get("secure_url")
+            except Exception as e:
+                print(f"Cloudinary upload failed: {e}")
+
+        # ----------------------------
         # Save Face Reference
         # ----------------------------
         SessionFace.objects.create(
             session=session,
             attendance=attendance,
-            embedding=face_embedding
+            embedding=face_embedding,
+            image_url=image_url
         )
 
         return Response(
