@@ -181,7 +181,10 @@ export default function FacialChallenge({ onChallengeSuccess }) {
                 img.src = imageSrc;
                 await new Promise((resolve) => { img.onload = resolve; });
 
-                const detection = await faceapi.detectSingleFace(img, new faceapi.TinyFaceDetectorOptions())
+                const detection = await faceapi.detectSingleFace(
+                    img, 
+                    new faceapi.TinyFaceDetectorOptions({ scoreThreshold: 0.2 })
+                )
                     .withFaceLandmarks()
                     .withFaceDescriptor();
                     
