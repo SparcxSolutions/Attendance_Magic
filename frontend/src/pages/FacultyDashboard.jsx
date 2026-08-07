@@ -2,7 +2,7 @@ import Navbar from "../components/Navbar";
 import StatsCard from "../components/StatsCard";
 import { useEffect, useState, useRef } from "react";
 import API from "../services/api";
-import SessionForm from "../components/SessionForm";
+import SessionForm from "../components/SessionForm"; 
 import AttendanceSummary from "../components/AttendanceSummary";
 import StudentTable from "../components/StudentTable";
 import { CalendarDays, Users, Activity, Copy, StopCircle, Search } from "lucide-react";
