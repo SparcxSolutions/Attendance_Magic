@@ -16,7 +16,7 @@ export default function FacialChallenge({ onChallengeSuccess }) {
         const loadFaceApiModels = async () => {
             try {
                 const modelUrl = 'https://unpkg.com/@vladmandic/face-api/model/';
-                await faceapi.nets.ssdMobilenetv1.loadFromUri(modelUrl);
+                await faceapi.nets.tinyFaceDetector.loadFromUri(modelUrl);
                 await faceapi.nets.faceLandmark68Net.loadFromUri(modelUrl);
                 await faceapi.nets.faceRecognitionNet.loadFromUri(modelUrl);
                 console.log("Face-API models loaded");
@@ -131,7 +131,7 @@ export default function FacialChallenge({ onChallengeSuccess }) {
                                         img.src = imageSrc;
                                         await new Promise((resolve) => { img.onload = resolve; });
 
-                                        const detection = await faceapi.detectSingleFace(img)
+                                        const detection = await faceapi.detectSingleFace(img, new faceapi.TinyFaceDetectorOptions())
                                             .withFaceLandmarks()
                                             .withFaceDescriptor();
                                             
